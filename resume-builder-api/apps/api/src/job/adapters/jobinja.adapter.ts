@@ -164,95 +164,51 @@ export class JobinjaAdapter {
   private parseJobListings(html: string): JobinjaJob[] {
     const jobs: JobinjaJob[] = [];
     
-    // Parse job cards from the HTML
-    // Jobinja uses specific CSS classes for job listings
-    const jobCardRegex = /<article[^>]*class="[^"]*c-jobListView__item[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-    const matches = html.matchAll(jobCardRegex);
+    // New structure: jobs are in <li> elements with c-jobListView__item class
+    // Title links have class c-jobListView__titleLink
+    const titleLinkRegex = /<a[^>]*class="c-jobListView__titleLink"[^>]*href="([^"]*)"[^>]*>\s*([^<]*)/gi;
+    const matches = [...html.matchAll(titleLinkRegex)];
+    
+    // Track unique job IDs to avoid duplicates
+    const seenIds = new Set<string>();
 
     for (const match of matches) {
       try {
-        const cardHtml = match[1];
-        const job = this.parseJobCard(cardHtml);
-        if (job) {
-          jobs.push(job);
-        }
-      } catch (error) {
-        this.logger.warn('Failed to parse job card', error);
-      }
-    }
-
-    // Alternative parsing if the above doesn't match
-    if (jobs.length === 0) {
-      const altJobRegex = /<a[^>]*href="(\/companies\/[^"]*\/jobs\/[^"]*)"[^>]*class="[^"]*c-jobListView__titleLink[^"]*"[^>]*>([^<]*)<\/a>/gi;
-      const altMatches = html.matchAll(altJobRegex);
-      
-      for (const match of altMatches) {
-        const jobUrl = match[1];
-        const title = match[2].trim();
-        const jobId = this.extractJobId(jobUrl);
+        const jobUrl = match[1].replace(/&amp;/g, '&');
+        const title = this.decodeHtmlEntities(match[2].trim());
         
-        if (jobId && title) {
-          jobs.push({
-            id: jobId,
-            title: title,
-            company: this.extractCompanyFromUrl(jobUrl),
-            location: 'ایران',
-            description: '',
-            requirements: [],
-            category: 'general',
-            experienceLevel: ExperienceLevel.MID,
-            postedAt: new Date(),
-            applicationUrl: `${this.baseUrl}${jobUrl}`,
-          });
-        }
+        // Extract job ID from URL - format: /companies/{company}/jobs/{jobId}/...
+        const jobIdMatch = jobUrl.match(/\/jobs\/([^\/\?]+)/);
+        const jobId = jobIdMatch ? jobIdMatch[1] : null;
+        
+        if (!jobId || seenIds.has(jobId) || !title) continue;
+        seenIds.add(jobId);
+
+        // Extract company from URL
+        const companyMatch = jobUrl.match(/\/companies\/([^\/]+)/);
+        const company = companyMatch 
+          ? this.decodeHtmlEntities(companyMatch[1].replace(/-/g, ' '))
+          : 'Unknown Company';
+
+        jobs.push({
+          id: jobId,
+          title: title,
+          company: company,
+          location: 'ایران',
+          description: '',
+          requirements: [],
+          category: 'general',
+          experienceLevel: ExperienceLevel.MID,
+          postedAt: new Date(),
+          applicationUrl: jobUrl.startsWith('http') ? jobUrl : `${this.baseUrl}${jobUrl}`,
+        });
+      } catch (error) {
+        this.logger.warn('Failed to parse job listing', error);
       }
     }
 
     this.logger.debug(`Parsed ${jobs.length} jobs from HTML`);
     return jobs;
-  }
-
-  private parseJobCard(cardHtml: string): JobinjaJob | null {
-    // Extract job URL and ID
-    const urlMatch = cardHtml.match(/href="(\/companies\/[^"]*\/jobs\/[^"]*)"/);
-    if (!urlMatch) return null;
-    
-    const jobUrl = urlMatch[1];
-    const jobId = this.extractJobId(jobUrl);
-    if (!jobId) return null;
-
-    // Extract title
-    const titleMatch = cardHtml.match(/c-jobListView__titleLink[^>]*>([^<]*)</);
-    const title = titleMatch ? this.decodeHtmlEntities(titleMatch[1].trim()) : 'Unknown Position';
-
-    // Extract company name
-    const companyMatch = cardHtml.match(/c-jobListView__company[^>]*>([^<]*)</);
-    const company = companyMatch ? this.decodeHtmlEntities(companyMatch[1].trim()) : this.extractCompanyFromUrl(jobUrl);
-
-    // Extract location
-    const locationMatch = cardHtml.match(/c-jobListView__location[^>]*>([^<]*)</);
-    const location = locationMatch ? this.decodeHtmlEntities(locationMatch[1].trim()) : 'ایران';
-
-    // Extract category
-    const categoryMatch = cardHtml.match(/c-jobListView__category[^>]*>([^<]*)</);
-    const category = categoryMatch ? this.decodeHtmlEntities(categoryMatch[1].trim()) : 'general';
-
-    // Extract posted date
-    const dateMatch = cardHtml.match(/c-jobListView__date[^>]*>([^<]*)</);
-    const postedAt = dateMatch ? this.parseJobinjaDate(dateMatch[1].trim()) : new Date();
-
-    return {
-      id: jobId,
-      title,
-      company,
-      location,
-      description: '',
-      requirements: [],
-      category: this.mapCategory(category),
-      experienceLevel: ExperienceLevel.MID,
-      postedAt,
-      applicationUrl: `${this.baseUrl}${jobUrl}`,
-    };
   }
 
   private extractJobId(url: string): string | null {
@@ -463,7 +419,9 @@ export class JobinjaAdapter {
 
     // Create form data for application
     const formData = new FormData();
-    formData.append('resume', new Blob([application.resumeFile], { type: 'application/pdf' }), 'resume.pdf');
+    // Convert Buffer to Uint8Array for Blob compatibility
+    const resumeData = new Uint8Array(application.resumeFile);
+    formData.append('resume', new Blob([resumeData], { type: 'application/pdf' }), 'resume.pdf');
     if (application.coverLetter) {
       formData.append('cover_letter', application.coverLetter);
     }

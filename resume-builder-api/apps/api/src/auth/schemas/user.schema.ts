@@ -39,6 +39,10 @@ export class User {
   @Prop({ type: String, default: null })
   jobinjaPasswordEncrypted?: string | null;
 
+  // AI model preference
+  @Prop({ type: String, default: 'meta-llama/Llama-3.3-70B-Instruct' })
+  preferredAiModel?: string;
+
   createdAt!: Date;
   updatedAt!: Date;
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JobRepository, JobSearchFilters, PaginatedJobs } from '../repositories/job.repository';
 import { JobSyncWorker, SyncResult } from '../workers/job-sync.worker';
+import { JobinjaAdapter } from '../adapters/jobinja.adapter';
 import { JobDocument } from '../schemas/job.schema';
 import { IJobListing, IJobSearchQuery } from '@app/shared';
 
@@ -33,6 +34,7 @@ export class JobService {
   constructor(
     private readonly jobRepository: JobRepository,
     private readonly jobSyncWorker: JobSyncWorker,
+    private readonly jobinjaAdapter: JobinjaAdapter,
   ) {}
 
   async searchJobs(query: IJobSearchQuery): Promise<PaginatedJobsResponse> {
@@ -45,7 +47,14 @@ export class JobService {
       experienceLevel: query.experienceLevel,
     };
 
+    // First try to get from database
     const result = await this.jobRepository.search(filters, query.page, query.limit);
+
+    // If no jobs in database, fetch directly from Jobinja
+    if (result.total === 0) {
+      this.logger.debug('No jobs in database, fetching directly from Jobinja');
+      return this.fetchFromJobinja(query);
+    }
 
     return {
       jobs: result.jobs.map(this.mapToJobListing),
@@ -54,6 +63,53 @@ export class JobService {
       limit: result.limit,
       totalPages: result.totalPages,
     };
+  }
+
+  private async fetchFromJobinja(query: IJobSearchQuery): Promise<PaginatedJobsResponse> {
+    try {
+      const jobs = await this.jobinjaAdapter.fetchJobs({
+        query: query.keyword,
+        location: query.location,
+        category: query.category,
+        page: query.page || 1,
+      });
+
+      // Map Jobinja jobs to response format
+      const mappedJobs: JobListingResponse[] = jobs.map(job => ({
+        id: job.id,
+        jabinjaId: job.id,
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description: job.description,
+        requirements: job.requirements,
+        category: job.category,
+        experienceLevel: job.experienceLevel,
+        postedAt: job.postedAt,
+        applicationUrl: job.applicationUrl,
+      }));
+
+      // Apply limit
+      const limit = query.limit || 10;
+      const paginatedJobs = mappedJobs.slice(0, limit);
+
+      return {
+        jobs: paginatedJobs,
+        total: jobs.length,
+        page: query.page || 1,
+        limit: limit,
+        totalPages: Math.ceil(jobs.length / limit),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch from Jobinja: ${error}`);
+      return {
+        jobs: [],
+        total: 0,
+        page: query.page || 1,
+        limit: query.limit || 10,
+        totalPages: 0,
+      };
+    }
   }
 
   async getJob(jobId: string): Promise<JobListingResponse> {

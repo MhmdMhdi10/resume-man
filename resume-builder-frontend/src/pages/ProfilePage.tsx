@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppSelector, useAppDispatch } from '../hooks';
 import { setProfile, setLoading, setError } from '../store/slices/profileSlice';
-import { profileApi } from '../services/api';
+import { profileApi, aiApi } from '../services/api';
 import type { WorkExperience, Education, Skill, PersonalInfo } from '../store/slices/profileSlice';
 
 export default function ProfilePage() {
@@ -243,7 +243,12 @@ function PersonalInfoSection({ personalInfo, onUpdate }: { personalInfo?: Person
 
 function WorkExperienceSection({ experiences, onUpdate }: { experiences: WorkExperience[]; onUpdate: () => void }) {
   const [adding, setAdding] = useState(false);
-  const [newExp, setNewExp] = useState({
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [improvingAll, setImprovingAll] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
     company: '',
     role: '',
     startDate: '',
@@ -253,17 +258,56 @@ function WorkExperienceSection({ experiences, onUpdate }: { experiences: WorkExp
     achievements: [''],
   });
 
+  const resetForm = () => {
+    setFormData({ company: '', role: '', startDate: '', endDate: '', current: false, description: '', achievements: [''] });
+  };
+
+  const startEdit = (exp: WorkExperience) => {
+    setEditingId(exp.id);
+    setFormData({
+      company: exp.company,
+      role: exp.role,
+      startDate: exp.startDate ? new Date(exp.startDate).toISOString().split('T')[0] : '',
+      endDate: exp.endDate ? new Date(exp.endDate).toISOString().split('T')[0] : '',
+      current: exp.current || false,
+      description: exp.description || '',
+      achievements: exp.achievements?.length ? exp.achievements : [''],
+    });
+    setAdding(false);
+  };
+
   const handleAdd = async () => {
+    setSaving(true);
     try {
       await profileApi.addWorkExperience({
-        ...newExp,
-        achievements: newExp.achievements.filter(a => a.trim()),
+        ...formData,
+        achievements: formData.achievements.filter(a => a.trim()),
       });
       setAdding(false);
-      setNewExp({ company: '', role: '', startDate: '', endDate: '', current: false, description: '', achievements: [''] });
+      resetForm();
       onUpdate();
     } catch (err) {
       console.error('Failed to add experience:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingId) return;
+    setSaving(true);
+    try {
+      await profileApi.updateWorkExperience(editingId, {
+        ...formData,
+        achievements: formData.achievements.filter(a => a.trim()),
+      });
+      setEditingId(null);
+      resetForm();
+      onUpdate();
+    } catch (err) {
+      console.error('Failed to update experience:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -278,96 +322,199 @@ function WorkExperienceSection({ experiences, onUpdate }: { experiences: WorkExp
     }
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium">Work Experience</h3>
+  const handleImproveAllDescriptions = async () => {
+    if (experiences.length === 0) return;
+    setShowAiModal(false);
+    setImprovingAll(true);
+    try {
+      const expData = experiences.map(exp => ({
+        id: exp.id,
+        role: exp.role,
+        company: exp.company,
+        description: exp.description || '',
+      }));
+      const response = await aiApi.improveAllDescriptions(expData, customPrompt || undefined);
+      const improved = response.data.data;
+      for (const item of improved) {
+        await profileApi.updateWorkExperience(item.id, { description: item.improvedDescription });
+      }
+      onUpdate();
+      setCustomPrompt('');
+    } catch (err) {
+      console.error('Failed to improve descriptions:', err);
+      alert('Failed to improve descriptions. Please try again.');
+    } finally {
+      setImprovingAll(false);
+    }
+  };
+
+  const renderForm = (isEdit: boolean) => (
+    <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
+      <div className="grid grid-cols-2 gap-3">
+        <input
+          type="text"
+          placeholder="Company"
+          value={formData.company}
+          onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          className="border rounded-md px-3 py-2"
+        />
+        <input
+          type="text"
+          placeholder="Role/Title"
+          value={formData.role}
+          onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+          className="border rounded-md px-3 py-2"
+        />
+        <input
+          type="date"
+          placeholder="Start Date"
+          value={formData.startDate}
+          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+          className="border rounded-md px-3 py-2"
+        />
+        <input
+          type="date"
+          placeholder="End Date"
+          value={formData.endDate}
+          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+          disabled={formData.current}
+          className="border rounded-md px-3 py-2 disabled:bg-gray-100"
+        />
+      </div>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={formData.current}
+          onChange={(e) => setFormData({ ...formData, current: e.target.checked, endDate: '' })}
+        />
+        <span className="text-sm">Currently working here</span>
+      </label>
+      <textarea
+        placeholder="Description"
+        value={formData.description}
+        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+        rows={3}
+        className="w-full border rounded-md px-3 py-2"
+      />
+      <div className="flex space-x-2">
         <button
-          onClick={() => setAdding(true)}
-          className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+          onClick={isEdit ? handleUpdate : handleAdd}
+          disabled={saving}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
         >
-          + Add Experience
+          {saving ? 'Saving...' : isEdit ? 'Update' : 'Add'}
+        </button>
+        <button
+          onClick={() => { isEdit ? setEditingId(null) : setAdding(false); resetForm(); }}
+          className="px-4 py-2 border rounded-md hover:bg-gray-50"
+        >
+          Cancel
         </button>
       </div>
+    </div>
+  );
 
-      {adding && (
-        <div className="border rounded-lg p-4 space-y-3 bg-gray-50">
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              type="text"
-              placeholder="Company"
-              value={newExp.company}
-              onChange={(e) => setNewExp({ ...newExp, company: e.target.value })}
-              className="border rounded-md px-3 py-2"
+  return (
+    <div className="space-y-4">
+      {/* AI Prompt Modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 space-y-4">
+            <h3 className="text-lg font-medium">AI Improve Descriptions</h3>
+            <p className="text-sm text-gray-500">
+              Add any specific instructions for the AI to follow when improving your descriptions.
+            </p>
+            <textarea
+              placeholder="e.g., Focus on leadership skills, use metrics where possible, keep it concise, target software engineering roles..."
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              rows={4}
+              className="w-full border rounded-md px-3 py-2"
             />
-            <input
-              type="text"
-              placeholder="Role/Title"
-              value={newExp.role}
-              onChange={(e) => setNewExp({ ...newExp, role: e.target.value })}
-              className="border rounded-md px-3 py-2"
-            />
-            <input
-              type="date"
-              placeholder="Start Date"
-              value={newExp.startDate}
-              onChange={(e) => setNewExp({ ...newExp, startDate: e.target.value })}
-              className="border rounded-md px-3 py-2"
-            />
-            <input
-              type="date"
-              placeholder="End Date"
-              value={newExp.endDate}
-              onChange={(e) => setNewExp({ ...newExp, endDate: e.target.value })}
-              disabled={newExp.current}
-              className="border rounded-md px-3 py-2 disabled:bg-gray-100"
-            />
-          </div>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={newExp.current}
-              onChange={(e) => setNewExp({ ...newExp, current: e.target.checked, endDate: '' })}
-            />
-            <span className="text-sm">Currently working here</span>
-          </label>
-          <textarea
-            placeholder="Description"
-            value={newExp.description}
-            onChange={(e) => setNewExp({ ...newExp, description: e.target.value })}
-            rows={3}
-            className="w-full border rounded-md px-3 py-2"
-          />
-          <div className="flex space-x-2">
-            <button onClick={handleAdd} className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">
-              Add
-            </button>
-            <button onClick={() => setAdding(false)} className="px-4 py-2 border rounded-md hover:bg-gray-50">
-              Cancel
-            </button>
+            <div className="flex space-x-2 justify-end">
+              <button
+                onClick={() => { setShowAiModal(false); setCustomPrompt(''); }}
+                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImproveAllDescriptions}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                ✨ Improve Descriptions
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Work Experience</h3>
+        <div className="flex space-x-2">
+          {experiences.length > 0 && (
+            <button
+              onClick={() => setShowAiModal(true)}
+              disabled={improvingAll}
+              className="px-3 py-1 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-1"
+            >
+              {improvingAll ? (
+                <>
+                  <span className="animate-spin">⚙️</span>
+                  <span>Improving...</span>
+                </>
+              ) : (
+                <>
+                  <span>✨</span>
+                  <span>AI Improve Descriptions</span>
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => { setAdding(true); setEditingId(null); resetForm(); }}
+            className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+          >
+            + Add Experience
+          </button>
+        </div>
+      </div>
+
+      {adding && renderForm(false)}
+
       <div className="space-y-4">
         {experiences.map((exp) => (
-          <div key={exp.id} className="border rounded-lg p-4">
-            <div className="flex justify-between">
-              <div>
-                <h4 className="font-medium">{exp.role}</h4>
-                <p className="text-gray-600">{exp.company}</p>
-                <p className="text-sm text-gray-500">
-                  {new Date(exp.startDate).toLocaleDateString()} - {exp.current ? 'Present' : new Date(exp.endDate!).toLocaleDateString()}
-                </p>
+          <div key={exp.id}>
+            {editingId === exp.id ? (
+              renderForm(true)
+            ) : (
+              <div className="border rounded-lg p-4">
+                <div className="flex justify-between">
+                  <div>
+                    <h4 className="font-medium">{exp.role}</h4>
+                    <p className="text-gray-600">{exp.company}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(exp.startDate).toLocaleDateString()} - {exp.current ? 'Present' : exp.endDate ? new Date(exp.endDate).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => startEdit(exp)}
+                      className="text-indigo-600 hover:text-indigo-500 text-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(exp.id)}
+                      className="text-red-600 hover:text-red-500 text-sm"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {exp.description && <p className="mt-2 text-gray-700">{exp.description}</p>}
               </div>
-              <button
-                onClick={() => handleDelete(exp.id)}
-                className="text-red-600 hover:text-red-500 text-sm"
-              >
-                Delete
-              </button>
-            </div>
-            {exp.description && <p className="mt-2 text-gray-700">{exp.description}</p>}
+            )}
           </div>
         ))}
         {experiences.length === 0 && !adding && (
@@ -517,6 +664,9 @@ function EducationSection({ education, onUpdate }: { education: Education[]; onU
 
 function SkillsSection({ skills, onUpdate }: { skills: Skill[]; onUpdate: () => void }) {
   const [adding, setAdding] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
   const [newSkill, setNewSkill] = useState({
     name: '',
     category: 'technical' as const,
@@ -543,6 +693,25 @@ function SkillsSection({ skills, onUpdate }: { skills: Skill[]; onUpdate: () => 
     }
   };
 
+  const handleExtractSkills = async () => {
+    setShowAiModal(false);
+    setExtracting(true);
+    try {
+      const response = await aiApi.extractSkillsAndSave(customPrompt || undefined);
+      const result = response.data.data;
+      if (result.added > 0) {
+        onUpdate();
+      }
+      alert(`AI extracted and added ${result.added} new skills!`);
+      setCustomPrompt('');
+    } catch (err) {
+      console.error('Failed to extract skills:', err);
+      alert('Failed to extract skills. Make sure you have work experiences added.');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   const groupedSkills = skills.reduce((acc, skill) => {
     if (!acc[skill.category]) acc[skill.category] = [];
     acc[skill.category].push(skill);
@@ -551,14 +720,66 @@ function SkillsSection({ skills, onUpdate }: { skills: Skill[]; onUpdate: () => 
 
   return (
     <div className="space-y-4">
+      {/* AI Prompt Modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 space-y-4">
+            <h3 className="text-lg font-medium">AI Extract Skills</h3>
+            <p className="text-sm text-gray-500">
+              Add any specific instructions for the AI when extracting skills from your work experiences.
+            </p>
+            <textarea
+              placeholder="e.g., Focus on backend technologies, include DevOps tools, prioritize programming languages, extract soft skills too..."
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              rows={4}
+              className="w-full border rounded-md px-3 py-2"
+            />
+            <div className="flex space-x-2 justify-end">
+              <button
+                onClick={() => { setShowAiModal(false); setCustomPrompt(''); }}
+                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExtractSkills}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                🔍 Extract Skills
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Skills</h3>
-        <button
-          onClick={() => setAdding(true)}
-          className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
-        >
-          + Add Skill
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setShowAiModal(true)}
+            disabled={extracting}
+            className="px-3 py-1 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-1"
+          >
+            {extracting ? (
+              <>
+                <span className="animate-spin">⚙️</span>
+                <span>Extracting...</span>
+              </>
+            ) : (
+              <>
+                <span>🔍</span>
+                <span>AI Extract Skills</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => setAdding(true)}
+            className="text-indigo-600 hover:text-indigo-500 text-sm font-medium"
+          >
+            + Add Skill
+          </button>
+        </div>
       </div>
 
       {adding && (

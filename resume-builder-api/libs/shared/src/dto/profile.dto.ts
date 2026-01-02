@@ -105,15 +105,16 @@ export class WorkExperienceDto {
   @IsBoolean()
   current!: boolean;
 
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(2000)
-  description!: string;
+  description?: string;
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @MaxLength(500, { each: true })
-  achievements!: string[];
+  achievements?: string[];
 }
 
 export class EducationDto {
@@ -147,10 +148,11 @@ export class EducationDto {
   @Max(4)
   gpa?: number;
 
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   @MaxLength(500, { each: true })
-  achievements!: string[];
+  achievements?: string[];
 }
 
 export class SkillDto {

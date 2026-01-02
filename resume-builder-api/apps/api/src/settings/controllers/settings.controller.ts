@@ -53,4 +53,27 @@ export class SettingsController {
       message: 'Jobinja credentials cleared successfully',
     };
   }
+
+  @Get('ai-model')
+  @HttpCode(HttpStatus.OK)
+  async getAiModelSettings(@CurrentUser('userId') userId: string) {
+    const settings = await this.settingsService.getAiModelSettings(userId);
+    return {
+      success: true,
+      data: settings,
+    };
+  }
+
+  @Post('ai-model')
+  @HttpCode(HttpStatus.OK)
+  async setAiModel(
+    @CurrentUser('userId') userId: string,
+    @Body() dto: { model: string },
+  ) {
+    await this.settingsService.setAiModel(userId, dto.model);
+    return {
+      success: true,
+      message: 'AI model updated successfully',
+    };
+  }
 }

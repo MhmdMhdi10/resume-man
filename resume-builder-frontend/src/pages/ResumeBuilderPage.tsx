@@ -43,18 +43,21 @@ export default function ResumeBuilderPage() {
         resumeApi.getTemplates(),
       ]);
       
-      setProfile(profileRes.data);
-      setTemplates(templatesRes.data);
+      const profileData = profileRes.data.data || profileRes.data;
+      const templatesData = templatesRes.data.data || templatesRes.data || [];
       
-      if (templatesRes.data.length > 0) {
-        setSelectedTemplate(templatesRes.data[0].id);
+      setProfile(profileData);
+      setTemplates(templatesData);
+      
+      if (templatesData.length > 0) {
+        setSelectedTemplate(templatesData[0].id);
       }
 
       // Pre-select all items
-      if (profileRes.data) {
-        setSelectedExperiences(profileRes.data.workExperience.map((e: any) => e.id));
-        setSelectedEducation(profileRes.data.education.map((e: any) => e.id));
-        setSelectedSkills(profileRes.data.skills.map((s: any) => s.id));
+      if (profileData) {
+        setSelectedExperiences((profileData.workExperience || []).map((e: any) => e.id));
+        setSelectedEducation((profileData.education || []).map((e: any) => e.id));
+        setSelectedSkills((profileData.skills || []).map((s: any) => s.id));
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load data');

@@ -10,6 +10,11 @@ export interface JobinjaCredentials {
   isConfigured: boolean;
 }
 
+export interface AiModelSettings {
+  model: string;
+  availableModels: Array<{ id: string; name: string; description: string }>;
+}
+
 @Injectable()
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
@@ -107,5 +112,49 @@ export class SettingsService {
       this.logger.error(`Failed to decrypt Jobinja password for user ${userId}`);
       return null;
     }
+  }
+
+  // AI Model Settings
+  private readonly availableModels = [
+    { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B', description: 'Most capable, best for complex tasks' },
+    { id: 'Qwen/Qwen3-4B-Thinking-2507', name: 'Qwen3 4B Thinking', description: 'Fast and efficient for simple tasks' },
+    { id: 'meta-llama/Llama-3.1-8B-Instruct', name: 'Llama 3.1 8B', description: 'Balanced speed and quality' },
+  ];
+
+  async getAiModelSettings(userId: string): Promise<AiModelSettings> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return {
+      model: user.preferredAiModel || 'meta-llama/Llama-3.3-70B-Instruct',
+      availableModels: this.availableModels,
+    };
+  }
+
+  async setAiModel(userId: string, model: string): Promise<{ success: boolean }> {
+    const user = await this.userModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const validModel = this.availableModels.find(m => m.id === model);
+    if (!validModel) {
+      throw new NotFoundException('Invalid AI model');
+    }
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      preferredAiModel: model,
+    });
+
+    this.logger.log(`AI model updated to ${model} for user ${userId}`);
+
+    return { success: true };
+  }
+
+  async getPreferredAiModel(userId: string): Promise<string> {
+    const user = await this.userModel.findById(userId).exec();
+    return user?.preferredAiModel || 'meta-llama/Llama-3.3-70B-Instruct';
   }
 }

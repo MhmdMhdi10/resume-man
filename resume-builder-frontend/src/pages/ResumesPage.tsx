@@ -25,8 +25,8 @@ export default function ResumesPage() {
     setLoading(true);
     try {
       const response = await resumeApi.getResumes(page, 10);
-      setResumes(response.data.resumes || response.data);
-      setTotalPages(response.data.totalPages || 1);
+      setResumes(response.data.data || response.data.resumes || []);
+      setTotalPages(response.data.pagination?.totalPages || response.data.totalPages || 1);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load resumes');
     } finally {

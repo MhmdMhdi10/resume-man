@@ -116,8 +116,8 @@ export class ProfileService {
         startDate: dto.startDate,
         endDate: dto.endDate,
         current: dto.current,
-        description: dto.description,
-        achievements: dto.achievements,
+        description: dto.description || '',
+        achievements: dto.achievements || [],
       },
       expectedVersion,
     );
@@ -198,7 +198,7 @@ export class ProfileService {
         startDate: dto.startDate,
         endDate: dto.endDate,
         gpa: dto.gpa,
-        achievements: dto.achievements,
+        achievements: dto.achievements || [],
       },
       expectedVersion,
     );

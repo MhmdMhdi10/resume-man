@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { JabinjaAdapter } from '../adapters/jabinja.adapter';
+import { JobinjaAdapter } from '../adapters/jobinja.adapter';
 import { JobRepository } from '../repositories/job.repository';
 
 export interface SyncResult {
@@ -20,7 +20,7 @@ export class JobSyncWorker implements OnModuleInit {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly jabinjaAdapter: JabinjaAdapter,
+    private readonly jobinjaAdapter: JobinjaAdapter,
     private readonly jobRepository: JobRepository,
   ) {
     this.syncEnabled = this.configService.get<boolean>('JOB_SYNC_ENABLED', false);
@@ -66,7 +66,7 @@ export class JobSyncWorker implements OnModuleInit {
         try {
           this.logger.debug(`Syncing page ${page}`);
           
-          const jobs = await this.jabinjaAdapter.fetchJobs({ page });
+          const jobs = await this.jobinjaAdapter.fetchJobs({ page });
           
           if (jobs.length === 0) {
             this.logger.debug(`No more jobs found at page ${page}, stopping sync`);
@@ -116,7 +116,7 @@ export class JobSyncWorker implements OnModuleInit {
     try {
       for (let page = 1; page <= this.pagesToSync; page++) {
         try {
-          const jobs = await this.jabinjaAdapter.fetchJobs({ category, page });
+          const jobs = await this.jobinjaAdapter.fetchJobs({ category, page });
           
           if (jobs.length === 0) break;
 

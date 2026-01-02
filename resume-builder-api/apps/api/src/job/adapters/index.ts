@@ -1,1 +1,1 @@
-export * from './jabinja.adapter';
+export * from './jobinja.adapter';

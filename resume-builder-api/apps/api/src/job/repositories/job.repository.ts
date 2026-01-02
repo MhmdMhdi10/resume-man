@@ -4,7 +4,7 @@ import { Model } from 'mongoose';
 import { Job, JobDocument } from '../schemas/job.schema';
 import { RedisService } from '../../database/redis.service';
 import { ExperienceLevel } from '@app/shared';
-import { JabinjaJob } from '../adapters/jabinja.adapter';
+import { JobinjaJob } from '../adapters/jobinja.adapter';
 
 export interface JobSearchFilters {
   keyword?: string;
@@ -131,23 +131,23 @@ export class JobRepository {
     return `${this.CACHE_PREFIX}search:${Buffer.from(filterHash).toString('base64')}`;
   }
 
-  async upsertFromJabinja(jabinjaJob: JabinjaJob): Promise<JobDocument> {
+  async upsertFromJabinja(jobinjaJob: JobinjaJob): Promise<JobDocument> {
     const jobData = {
-      jabinjaId: jabinjaJob.id,
-      title: jabinjaJob.title,
-      company: jabinjaJob.company,
-      location: jabinjaJob.location,
-      description: jabinjaJob.description,
-      requirements: jabinjaJob.requirements,
-      category: jabinjaJob.category,
-      experienceLevel: jabinjaJob.experienceLevel,
-      applicationUrl: jabinjaJob.applicationUrl,
-      postedAt: jabinjaJob.postedAt,
+      jabinjaId: jobinjaJob.id,
+      title: jobinjaJob.title,
+      company: jobinjaJob.company,
+      location: jobinjaJob.location,
+      description: jobinjaJob.description,
+      requirements: jobinjaJob.requirements,
+      category: jobinjaJob.category,
+      experienceLevel: jobinjaJob.experienceLevel,
+      applicationUrl: jobinjaJob.applicationUrl,
+      postedAt: jobinjaJob.postedAt,
       syncedAt: new Date(),
     };
 
     const job = await this.jobModel.findOneAndUpdate(
-      { jabinjaId: jabinjaJob.id },
+      { jabinjaId: jobinjaJob.id },
       { $set: jobData },
       { upsert: true, new: true },
     ).exec();
@@ -158,10 +158,10 @@ export class JobRepository {
     return job;
   }
 
-  async bulkUpsertFromJabinja(jabinjaJobs: JabinjaJob[]): Promise<number> {
-    if (jabinjaJobs.length === 0) return 0;
+  async bulkUpsertFromJabinja(jobinjaJobs: JobinjaJob[]): Promise<number> {
+    if (jobinjaJobs.length === 0) return 0;
 
-    const operations = jabinjaJobs.map((job) => ({
+    const operations = jobinjaJobs.map((job) => ({
       updateOne: {
         filter: { jabinjaId: job.id },
         update: {

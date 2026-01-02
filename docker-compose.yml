@@ -86,6 +86,8 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       S3_BUCKET: ${S3_BUCKET:-resumes}
       S3_REGION: ${S3_REGION:-us-east-1}
+      NSCALE_API_KEY: ${NSCALE_API_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your-32-char-encryption-key-here}
     depends_on:
       mongodb:
         condition: service_healthy

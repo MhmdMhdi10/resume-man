@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { settingsApi, notificationApi } from '../services/api';
-import type { NotificationPreferences } from '../services/api';
+import type { NotificationPreferences, AiModelSettings } from '../services/api';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'jobinja' | 'notifications'>('jobinja');
+  const [activeTab, setActiveTab] = useState<'jobinja' | 'ai' | 'notifications'>('jobinja');
 
   return (
     <div className="space-y-6">
@@ -21,6 +21,16 @@ export default function SettingsPage() {
               Jobinja Account
             </button>
             <button
+              onClick={() => setActiveTab('ai')}
+              className={`py-4 px-6 text-sm font-medium border-b-2 ${
+                activeTab === 'ai'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              AI Model
+            </button>
+            <button
               onClick={() => setActiveTab('notifications')}
               className={`py-4 px-6 text-sm font-medium border-b-2 ${
                 activeTab === 'notifications'
@@ -35,8 +45,124 @@ export default function SettingsPage() {
 
         <div className="p-6">
           {activeTab === 'jobinja' && <JobinjaSettingsSection />}
+          {activeTab === 'ai' && <AiModelSettingsSection />}
           {activeTab === 'notifications' && <NotificationSettingsSection />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AiModelSettingsSection() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<AiModelSettings | null>(null);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const response = await settingsApi.getAiModelSettings();
+      const data = response.data.data;
+      setSettings(data);
+      setSelectedModel(data.model);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load AI settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await settingsApi.setAiModel(selectedModel);
+      setSuccess('AI model updated successfully');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to save AI model');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-32">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">AI Model Selection</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Choose the AI model used for improving descriptions and extracting skills from your profile.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 p-4 rounded-md">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 p-4 rounded-md">
+          <p className="text-green-700 text-sm">{success}</p>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {settings?.availableModels.map((model) => (
+          <label
+            key={model.id}
+            className={`flex items-start p-4 border rounded-lg cursor-pointer transition-colors ${
+              selectedModel === model.id
+                ? 'border-indigo-500 bg-indigo-50'
+                : 'border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            <input
+              type="radio"
+              name="ai-model"
+              value={model.id}
+              checked={selectedModel === model.id}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+            />
+            <div className="ml-3">
+              <span className="block text-sm font-medium text-gray-900">{model.name}</span>
+              <span className="block text-sm text-gray-500">{model.description}</span>
+              <span className="block text-xs text-gray-400 mt-1 font-mono">{model.id}</span>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <button
+        onClick={handleSave}
+        disabled={saving || selectedModel === settings?.model}
+        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {saving ? 'Saving...' : 'Save Model'}
+      </button>
+
+      <div className="border-t pt-4">
+        <h4 className="text-sm font-medium text-gray-900">About AI Features</h4>
+        <ul className="mt-2 text-sm text-gray-500 space-y-1">
+          <li>• <strong>Improve Descriptions:</strong> Enhances your work experience descriptions to be more impactful</li>
+          <li>• <strong>Extract Skills:</strong> Automatically identifies skills from your work experiences</li>
+          <li>• Larger models provide better quality but may be slower</li>
+        </ul>
       </div>
     </div>
   );

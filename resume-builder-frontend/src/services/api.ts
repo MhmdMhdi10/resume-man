@@ -178,9 +178,34 @@ export interface JobinjaCredentials {
   isConfigured: boolean;
 }
 
+export interface AiModelSettings {
+  model: string;
+  availableModels: Array<{ id: string; name: string; description: string }>;
+}
+
 export const settingsApi = {
   getJobinjaCredentials: () => api.get<{ success: boolean; data: JobinjaCredentials }>('/settings/jobinja'),
   setJobinjaCredentials: (data: { email: string; password: string }) =>
     api.post('/settings/jobinja', data),
   clearJobinjaCredentials: () => api.delete('/settings/jobinja'),
+  getAiModelSettings: () => api.get<{ success: boolean; data: AiModelSettings }>('/settings/ai-model'),
+  setAiModel: (model: string) => api.post('/settings/ai-model', { model }),
+};
+
+// AI API
+export interface ExtractedSkill {
+  name: string;
+  category: 'technical' | 'soft' | 'language' | 'tool';
+  proficiencyLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+}
+
+export const aiApi = {
+  improveDescription: (data: { experienceId: string; description: string; role: string; company: string }) =>
+    api.post<{ success: boolean; data: { experienceId: string; original: string; improved: string } }>('/ai/improve-description', data),
+  improveAllDescriptions: (experiences: Array<{ id: string; role: string; company: string; description: string }>, customPrompt?: string) =>
+    api.post<{ success: boolean; data: Array<{ id: string; improvedDescription: string }> }>('/ai/improve-all-descriptions', { experiences, customPrompt }),
+  extractSkills: (customPrompt?: string) =>
+    api.post<{ success: boolean; data: ExtractedSkill[] }>('/ai/extract-skills', { customPrompt }),
+  extractSkillsAndSave: (customPrompt?: string) =>
+    api.post<{ success: boolean; data: { added: number; skills: ExtractedSkill[] } }>('/ai/extract-skills-and-save', { customPrompt }),
 };

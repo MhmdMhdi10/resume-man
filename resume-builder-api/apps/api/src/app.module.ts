@@ -12,6 +12,7 @@ import { AutoSenderModule } from './auto-sender/auto-sender.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
 import { SettingsModule } from './settings/settings.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SettingsModule } from './settings/settings.module';
     DashboardModule,
     NotificationModule,
     SettingsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
