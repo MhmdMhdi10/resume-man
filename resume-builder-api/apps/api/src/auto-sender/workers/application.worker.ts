@@ -6,17 +6,24 @@ import { ApplicationStatus, NotificationType, NotificationChannel } from '@app/s
 import { Application, ApplicationDocument } from '../schemas/application.schema';
 import { ApplicationQueueService, QueuedApplicationItem } from '../services/application-queue.service';
 import { AutoSenderService } from '../services/auto-sender.service';
-import { JabinjaAdapter, ApplicationPayload } from '../../job/adapters/jabinja.adapter';
+import { JobinjaAdapter, ApplicationPayload } from '../../job/adapters/jobinja.adapter';
 import { Resume, ResumeDocument } from '../../resume/schemas/resume.schema';
 import { Profile, ProfileDocument } from '../../profile/schemas/profile.schema';
 import { StorageService } from '../../resume/services/storage.service';
 import { NotificationService } from '../../notification/services/notification.service';
+import { SettingsService } from '../../settings/services/settings.service';
 
 export interface ProcessResult {
   success: boolean;
   confirmationId?: string;
   shouldRetry: boolean;
   errorMessage?: string;
+}
+
+// Cache for user session cookies
+interface SessionCache {
+  cookie: string;
+  expiresAt: Date;
 }
 
 @Injectable()
@@ -26,14 +33,16 @@ export class ApplicationWorker implements OnModuleInit, OnModuleDestroy {
   private readonly pollIntervalMs: number;
   private isRunning = false;
   private pollTimeout: NodeJS.Timeout | null = null;
+  private sessionCache: Map<string, SessionCache> = new Map();
 
   constructor(
     private readonly configService: ConfigService,
     private readonly queueService: ApplicationQueueService,
     private readonly autoSenderService: AutoSenderService,
-    private readonly jabinjaAdapter: JabinjaAdapter,
+    private readonly jabinjaAdapter: JobinjaAdapter,
     private readonly storageService: StorageService,
     private readonly notificationService: NotificationService,
+    private readonly settingsService: SettingsService,
     @InjectModel(Resume.name)
     private readonly resumeModel: Model<ResumeDocument>,
     @InjectModel(Profile.name)
@@ -190,6 +199,16 @@ export class ApplicationWorker implements OnModuleInit, OnModuleDestroy {
       };
     }
 
+    // Get Jobinja session cookie for the user
+    const sessionCookie = await this.getJobinjaSession(item.userId);
+    if (!sessionCookie) {
+      return {
+        success: false,
+        shouldRetry: false,
+        errorMessage: 'Jobinja credentials not configured. Please set up your Jobinja account in Settings.',
+      };
+    }
+
     // Download resume file
     let resumeBuffer: Buffer;
     try {
@@ -214,10 +233,11 @@ export class ApplicationWorker implements OnModuleInit, OnModuleDestroy {
       },
     };
 
-    // Submit to Jabinja
+    // Submit to Jobinja with session cookie
     const result = await this.jabinjaAdapter.submitApplication(
       application.jobId.toString(),
       payload,
+      sessionCookie,
     );
 
     return {
@@ -226,6 +246,43 @@ export class ApplicationWorker implements OnModuleInit, OnModuleDestroy {
       shouldRetry: !result.success,
       errorMessage: result.errorMessage,
     };
+  }
+
+  /**
+   * Get or create a Jobinja session for the user
+   */
+  private async getJobinjaSession(userId: string): Promise<string | null> {
+    // Check cache first
+    const cached = this.sessionCache.get(userId);
+    if (cached && cached.expiresAt > new Date()) {
+      return cached.cookie;
+    }
+
+    // Get user's Jobinja credentials
+    const credentials = await this.settingsService.getJobinjaCredentials(userId);
+    if (!credentials.isConfigured) {
+      return null;
+    }
+
+    const password = await this.settingsService.getDecryptedJobinjaPassword(userId);
+    if (!password) {
+      return null;
+    }
+
+    // Login to Jobinja
+    const loginResult = await this.jabinjaAdapter.loginToJobinja(credentials.email, password);
+    if (!loginResult.success || !loginResult.sessionCookie) {
+      this.logger.warn(`Failed to login to Jobinja for user ${userId}: ${loginResult.errorMessage}`);
+      return null;
+    }
+
+    // Cache the session (expires in 1 hour)
+    this.sessionCache.set(userId, {
+      cookie: loginResult.sessionCookie,
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+
+    return loginResult.sessionCookie;
   }
 
   /**

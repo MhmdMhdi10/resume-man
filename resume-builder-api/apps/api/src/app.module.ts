@@ -11,6 +11,7 @@ import { JobModule } from './job/job.module';
 import { AutoSenderModule } from './auto-sender/auto-sender.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationModule } from './notification/notification.module';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificationModule } from './notification/notification.module';
     AutoSenderModule,
     DashboardModule,
     NotificationModule,
+    SettingsModule,
   ],
   controllers: [AppController],
   providers: [

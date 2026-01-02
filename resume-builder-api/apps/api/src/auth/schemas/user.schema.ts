@@ -32,6 +32,13 @@ export class User {
   @Prop({ type: Date, default: null })
   passwordResetExpires?: Date | null;
 
+  // Jobinja credentials for auto-apply feature
+  @Prop({ type: String, default: null })
+  jobinjaEmail?: string | null;
+
+  @Prop({ type: String, default: null })
+  jobinjaPasswordEncrypted?: string | null;
+
   createdAt!: Date;
   updatedAt!: Date;
 

@@ -13,6 +13,7 @@ import { JobModule } from '../job/job.module';
 import { ResumeModule } from '../resume/resume.module';
 import { ProfileModule } from '../profile/profile.module';
 import { NotificationModule } from '../notification/notification.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { NotificationModule } from '../notification/notification.module';
     ResumeModule,
     ProfileModule,
     NotificationModule,
+    SettingsModule,
   ],
   controllers: [AutoSenderController],
   providers: [

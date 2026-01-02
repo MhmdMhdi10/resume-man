@@ -20,7 +20,7 @@ interface GenerateResumeDto extends ResumeOptionsDto {
   name: string;
 }
 
-@Controller('resumes')
+@Controller('resume')
 @UseGuards(JwtAuthGuard)
 export class ResumeController {
   constructor(
