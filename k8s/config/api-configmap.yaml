@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: resume-builder
+  labels:
+    app: api
+    app.kubernetes.io/name: api
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: resume-builder
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  # MongoDB Configuration
+  MONGODB_DATABASE: "resume_builder"
+  # Redis Configuration
+  REDIS_PORT: "6379"
+  # JWT Configuration
+  JWT_EXPIRATION: "3600"
+  JWT_REFRESH_EXPIRATION: "604800"
+  # S3/MinIO Configuration
+  S3_REGION: "us-east-1"
+  S3_BUCKET: "resumes"
+  # Rate Limiting
+  RATE_LIMIT_TTL: "60"
+  RATE_LIMIT_MAX: "100"
+  # Logging
+  LOG_LEVEL: "info"
